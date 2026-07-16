@@ -95,21 +95,15 @@ class MouseActivity : AppCompatActivity() {
 
     private fun startHeartbeat(ip: String, port: Int) {
         lifecycleScope.launch {
-            var pingCount = 0
             while (true) {
-                val start = System.currentTimeMillis()
                 val isConnected = UdpClient.ping(ip, port)
-                val pingMs = System.currentTimeMillis() - start
-                pingCount++
                 
                 if (isConnected) {
                     binding.connectionStatus.text = "Connected to $ip:$port"
                     binding.connectionStatus.setTextColor(getColor(R.color.primary))
-                    binding.debugStatus.text = "Ping: ${pingMs}ms | Ticks: $pingCount"
                 } else {
                     binding.connectionStatus.text = "Disconnected! Trying to reconnect..."
                     binding.connectionStatus.setTextColor(getColor(android.R.color.holo_red_light))
-                    binding.debugStatus.text = "Ping Failed (${pingMs}ms)"
                 }
                 delay(2000)
             }

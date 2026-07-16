@@ -60,6 +60,10 @@ int main() {
         return 1;
     }
 
+    // Set 500ms receive timeout so recvfrom doesn't block forever when disconnected
+    DWORD timeout = 500;
+    setsockopt(serverSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+
     // Bind the socket to the port
     sockaddr_in serverService;
     serverService.sin_family = AF_INET;
@@ -82,6 +86,9 @@ int main() {
     int clientAddrLen = sizeof(clientAddr);
 
     auto lastRecvTime = std::chrono::high_resolution_clock::now();
+    bool isConnected = false;
+
+    std::cout << "Waiting for connection from Android app..." << std::endl;
 
     while (true) {
         // Receive packet (blocking)
@@ -90,16 +97,23 @@ int main() {
         double dtMs = std::chrono::duration<double, std::milli>(now - lastRecvTime).count();
         lastRecvTime = now;
 
-        if (dtMs > 30.0 && bytesReceived > 0) {
-            std::cout << "[WARNING] Network lag spike! Packet took " << dtMs << " ms to arrive." << std::endl;
+        if (bytesReceived > 0) {
+            if (!isConnected) {
+                std::cout << "[INFO] Client Connected! Receiving data..." << std::endl;
+                isConnected = true;
+            }
+        } else if (dtMs > 4000.0 && isConnected) {
+            std::cout << "[INFO] Client Disconnected. Waiting for reconnection..." << std::endl;
+            isConnected = false;
         }
+
         if (bytesReceived == SOCKET_ERROR) {
-            // If it's WSAEINTR or similar, we can continue. For other errors, print.
             int err = WSAGetLastError();
-            if (err != WSAEINTR) {
+            // WSAETIMEDOUT happens every 500ms if no data arrives. WSAEINTR is normal interruption.
+            if (err != WSAEINTR && err != WSAETIMEDOUT) {
                 std::cerr << "recvfrom failed with error: " << err << std::endl;
             }
-            continue;
+            continue; // Skip processing
         }
 
         // Protect against buffer overflow
