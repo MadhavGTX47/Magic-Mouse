@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- M3 AMOLED Theme Colors from HTML -->
+    <color name="background">#000000</color>
+    <color name="surface">#000000</color>
+    <color name="surface_container">#201f23</color>
+    <color name="surface_container_high">#2b292d</color>
+    <color name="surface_container_low">#1c1b1f</color>
+    <color name="surface_bright">#3a383d</color>
+    <color name="surface_variant">#353438</color>
+    
+    <color name="primary">#71d7cd</color>
+    <color name="on_primary">#003733</color>
+    <color name="primary_fixed">#8ef4e9</color>
+    <color name="primary_fixed_dim">#71d7cd</color>
+    
+    <color name="on_surface">#e5e1e7</color>
+    <color name="on_surface_variant">#bdc9c6</color>
+    
+    <color name="outline">#879391</color>
+    <color name="outline_variant">#3d4947</color>
+
+    <!-- Legacy mappings for existing Java code -->
+    <color name="black">#000000</color>
+    <color name="surface_dark">#201f23</color> <!-- surface_container -->
+    <color name="surface_dark_variant">#353438</color> <!-- surface_variant -->
+    
+    <color name="cyan_accent">#71d7cd</color> <!-- primary -->
+    <color name="cyan_accent_glow">#4071d7cd</color> <!-- 25% primary -->
+    <color name="cyan_dark">#003733</color> <!-- on_primary -->
+
+    <color name="text_primary">#e5e1e7</color> <!-- on_surface -->
+    <color name="text_secondary">#bdc9c6</color> <!-- on_surface_variant -->
+    <color name="text_disabled">#80bdc9c6</color>
+    
+    <color name="button_pressed">#3371d7cd</color> <!-- 20% primary -->
+    <color name="button_normal">#201f23</color> <!-- surface_container -->
+</resources>

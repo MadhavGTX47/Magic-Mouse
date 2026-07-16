@@ -1,0 +1,20 @@
+# Windows
+*.exe
+*.obj
+*.dll
+
+# Android/Gradle
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+
+# CMake
+server/build/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+*.cmake
+Makefile

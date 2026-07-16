@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    tools:context=".MouseActivity">
+
+    <!-- TopAppBar -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/topAppBar"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:background="@color/background"
+        android:paddingHorizontal="16dp"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#66879391"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:src="@drawable/ic_mouse"
+            app:tint="@color/on_surface_variant"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MagicMouse"
+            android:textColor="@color/primary"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:letterSpacing="-0.01"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+        <ImageButton
+            android:id="@+id/settingsButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:src="@drawable/ic_settings"
+            app:tint="@color/on_surface_variant"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="16dp"
+        app:layout_constraintTop_toBottomOf="@id/topAppBar"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- Status Indicator -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_gravity="center_horizontal"
+            android:background="@drawable/rounded_pill_bg"
+            android:backgroundTint="@color/surface_container"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="6dp">
+
+            <View
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/circle_button_bg"
+                android:backgroundTint="@color/primary"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:id="@+id/connectionStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Connected"
+                android:textColor="@color/on_surface_variant"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Debug Indicator -->
+        <TextView
+            android:id="@+id/debugStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textColor="@color/primary"
+            android:textSize="10sp"
+            android:visibility="visible" />
+
+        <!-- Controller Core Area (Left Click, Scroll, Right Click) -->
+        <LinearLayout
+            android:id="@+id/clickLayout"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="24dp"
+            android:baselineAligned="false">
+
+            <!-- Left Click -->
+            <FrameLayout
+                android:id="@+id/leftClickButton"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/rounded_card_bg"
+                android:backgroundTint="@color/surface_container">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="LEFT"
+                    android:textColor="@color/on_surface_variant"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.1"
+                    android:alpha="0.7" />
+
+                <View
+                    android:layout_width="48dp"
+                    android:layout_height="4dp"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:layout_marginBottom="16dp"
+                    android:background="@drawable/rounded_pill_bg"
+                    android:backgroundTint="#80879391" />
+            </FrameLayout>
+
+            <!-- Middle Click & Vertical Scroll Slider -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginHorizontal="16dp"
+                android:orientation="vertical">
+                
+                <!-- Middle Click -->
+                <FrameLayout
+                    android:id="@+id/middleClickButton"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_marginBottom="16dp"
+                    android:background="@drawable/rounded_pill_bg"
+                    android:backgroundTint="@color/surface_container">
+                    
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="MID"
+                        android:textColor="@color/on_surface_variant"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1"
+                        android:alpha="0.7" />
+                </FrameLayout>
+
+                <!-- Scroll Area -->
+                <FrameLayout
+                    android:id="@+id/scrollArea"
+                    android:layout_width="64dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/rounded_pill_bg"
+                    android:backgroundTint="@color/surface_container"
+                    android:paddingVertical="24dp">
+
+                    <View
+                        android:layout_width="4dp"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="center"
+                        android:background="@drawable/rounded_pill_bg"
+                        android:backgroundTint="#4D879391" />
+
+                    <!-- Decorative elements simulating the track -->
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="top|center_horizontal"
+                        android:src="@android:drawable/arrow_up_float"
+                        app:tint="#B3bdc9c6" />
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:src="@android:drawable/arrow_down_float"
+                        app:tint="#B3bdc9c6" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <!-- Right Click -->
+            <FrameLayout
+                android:id="@+id/rightClickButton"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/rounded_card_bg"
+                android:backgroundTint="@color/surface_container">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="RIGHT"
+                    android:textColor="@color/on_surface_variant"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.1"
+                    android:alpha="0.7" />
+
+                <View
+                    android:layout_width="48dp"
+                    android:layout_height="4dp"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:layout_marginBottom="16dp"
+                    android:background="@drawable/rounded_pill_bg"
+                    android:backgroundTint="#80879391" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Secondary Actions -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:layout_marginBottom="24dp">
+
+            <Button
+                android:id="@+id/recenterButton"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="Re-center"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:backgroundTint="@color/background"
+                app:strokeColor="#99879391"
+                app:strokeWidth="1dp"
+                app:cornerRadius="28dp"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/micFab"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="Dictate"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:backgroundTint="@color/background"
+                app:strokeColor="#99879391"
+                app:strokeWidth="1dp"
+                app:cornerRadius="28dp"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <!-- Primary Action (Gyro) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/gyroToggleButtonCard"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            app:cardCornerRadius="32dp"
+            app:cardElevation="8dp"
+            app:cardBackgroundColor="@color/surface_container"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:background="?attr/selectableItemBackground">
+
+                <ImageView
+                    android:id="@+id/gyroIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_gyroscope"
+                    app:tint="@color/primary" />
+
+                <TextView
+                    android:id="@+id/gyroStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ACTIVATE GYRO"
+                    android:textColor="@color/primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

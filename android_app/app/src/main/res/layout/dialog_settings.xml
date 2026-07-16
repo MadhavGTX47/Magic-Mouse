@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/surface_dark"
+    android:padding="24dp">
+
+    <!-- Top Handle for Bottom Sheet -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:background="@color/text_disabled"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/settings"
+        android:textColor="@color/text_primary"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp"/>
+
+    <!-- Sensitivity Label & SeekBar -->
+    <TextView
+        android:id="@+id/sensitivityLabelText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Sensitivity: 20"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp"
+        android:layout_marginBottom="8dp" />
+
+    <SeekBar
+        android:id="@+id/sensitivitySeekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="100"
+        android:progress="20"
+        android:progressTint="@color/cyan_accent"
+        android:thumbTint="@color/cyan_accent"
+        android:layout_marginBottom="24dp"/>
+
+    <!-- Calibrate Gyro Button -->
+    <Button
+        android:id="@+id/calibrateButton"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Re-center Cursor"
+        android:textColor="@color/text_primary"
+        android:textSize="16sp"
+        android:backgroundTint="@color/surface_dark_variant"
+        app:strokeColor="@color/cyan_accent"
+        app:strokeWidth="1dp"
+        app:cornerRadius="12dp"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Disconnect / Change IP Button -->
+    <Button
+        android:id="@+id/disconnectButton"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Disconnect"
+        android:textColor="@color/black"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:backgroundTint="@android:color/holo_red_dark"
+        app:cornerRadius="12dp"/>
+
+</LinearLayout>
