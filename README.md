@@ -28,7 +28,7 @@ Most air mouse apps suffer from terrible cursor drift because they only use raw 
 Requires `g++` (via MSYS2 or MinGW). Open your terminal in the `server` directory and run:
 
 ```cmd
-g++ src/main.cpp src/InputController.cpp -o MagicMouseServer.exe -lws2_32 -luser32 -mwindows
+g++ src/main.cpp src/InputController.cpp -o MagicMouseServer.exe -lws2_32 -luser32
 ./MagicMouseServer.exe
 ```
 This will start the server and print your local IP addresses.
