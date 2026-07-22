@@ -1,246 +1,202 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winsock2.h>
-#include <ws2tcpip.h>
+#include <ws2bth.h>
 #include <iostream>
 #include <string>
 #include <vector>
-#include <thread>
 #include <chrono>
+#include <cstdint>
 #include "InputController.h"
 
 // Link with ws2_32.lib
 #pragma comment(lib, "ws2_32.lib")
 
-#define DEFAULT_PORT 9876
-#define BUFFER_BUFLEN 1024
-
-void printLocalIPs() {
-    char hostname[256];
-    if (gethostname(hostname, sizeof(hostname)) == 0) {
-        struct hostent* host = gethostbyname(hostname);
-        if (host != nullptr) {
-            std::cout << "\n=========================================\n";
-            std::cout << "MagicMouse Server - Available IP Addresses\n";
-            std::cout << "=========================================\n";
-            for (int i = 0; host->h_addr_list[i] != nullptr; ++i) {
-                struct in_addr addr;
-                memcpy(&addr, host->h_addr_list[i], sizeof(struct in_addr));
-                std::cout << " -> " << inet_ntoa(addr) << std::endl;
-            }
-            std::cout << "=========================================\n\n";
-        }
-    } else {
-        std::cerr << "Failed to get local hostname." << std::endl;
-    }
-}
+// Custom MagicMouse Bluetooth UUID: 94f39d29-7d6d-437d-973b-fba39e49d4ee
+static const GUID MagicMouse_UUID = { 0x94f39d29, 0x7d6d, 0x437d, { 0x97, 0x3b, 0xfb, 0xa3, 0x9e, 0x49, 0xd4, 0xee } };
 
 int main() {
     // Set DPI awareness so GetSystemMetrics returns physical pixels instead of scaled coordinates
     SetProcessDPIAware();
 
     WSADATA wsaData;
-    int iResult;
-
-    // Initialize Winsock
-    iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != 0) {
-        std::cerr << "WSAStartup failed with error: " << iResult << std::endl;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        std::cerr << "WSAStartup failed." << std::endl;
         return 1;
     }
 
-    // Print IPs so the user knows what to type in the Android app
-    printLocalIPs();
-
-    // Create a UDP Socket
-    SOCKET serverSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (serverSocket == INVALID_SOCKET) {
-        std::cerr << "socket failed with error: " << WSAGetLastError() << std::endl;
+    SOCKET listenSocket = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
+    if (listenSocket == INVALID_SOCKET) {
+        std::cerr << "Bluetooth socket creation failed with error: " << WSAGetLastError() << std::endl;
         WSACleanup();
         return 1;
     }
 
-    // Set 500ms receive timeout so recvfrom doesn't block forever when disconnected
-    DWORD timeout = 500;
-    setsockopt(serverSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+    SOCKADDR_BTH sab;
+    memset(&sab, 0, sizeof(sab));
+    sab.addressFamily = AF_BTH;
+    sab.btAddr = 0; // BTH_ADDR_NULL (local radio)
+    sab.serviceClassId = MagicMouse_UUID;
+    sab.port = BT_PORT_ANY;
 
-    // Bind the socket to the port
-    sockaddr_in serverService;
-    serverService.sin_family = AF_INET;
-    serverService.sin_addr.s_addr = INADDR_ANY;
-    serverService.sin_port = htons(DEFAULT_PORT);
-
-    iResult = bind(serverSocket, (SOCKADDR*)&serverService, sizeof(serverService));
-    if (iResult == SOCKET_ERROR) {
-        std::cerr << "bind failed with error: " << WSAGetLastError() << std::endl;
-        closesocket(serverSocket);
+    if (bind(listenSocket, (SOCKADDR*)&sab, sizeof(sab)) == SOCKET_ERROR) {
+        std::cerr << "Bluetooth bind failed with error: " << WSAGetLastError() << std::endl;
+        closesocket(listenSocket);
         WSACleanup();
         return 1;
     }
 
-    std::cout << "Server listening on UDP port " << DEFAULT_PORT << "...\n" << std::endl;
+    // Get assigned RFCOMM channel
+    int sabLen = sizeof(sab);
+    getsockname(listenSocket, (SOCKADDR*)&sab, &sabLen);
+
+    // Register SDP service record so Android apps can discover the service by UUID
+    WSAQUERYSET saSet;
+    memset(&saSet, 0, sizeof(saSet));
+    saSet.dwSize = sizeof(saSet);
+    saSet.lpszServiceInstanceName = (LPSTR)"MagicMouse Server";
+    saSet.lpServiceClassId = (LPGUID)&MagicMouse_UUID;
+    saSet.dwNameSpace = NS_BTH;
+    saSet.dwNumberOfCsAddrs = 1;
+
+    CSADDR_INFO csAddr;
+    memset(&csAddr, 0, sizeof(csAddr));
+    csAddr.LocalAddr.lpSockaddr = (LPSOCKADDR)&sab;
+    csAddr.LocalAddr.iSockaddrLength = sizeof(sab);
+    csAddr.iSocketType = SOCK_STREAM;
+    csAddr.iProtocol = BTHPROTO_RFCOMM;
+
+    saSet.lpcsaBuffer = &csAddr;
+
+    if (WSASetService(&saSet, RNRSERVICE_REGISTER, 0) == SOCKET_ERROR) {
+        std::cout << "[INFO] WSASetService SDP registration note: " << WSAGetLastError() 
+                  << " (Direct pair connection ready)" << std::endl;
+    }
+
+    if (listen(listenSocket, 1) == SOCKET_ERROR) {
+        std::cerr << "Bluetooth listen failed with error: " << WSAGetLastError() << std::endl;
+        closesocket(listenSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    std::cout << "\n=========================================\n";
+    std::cout << " MagicMouse Bluetooth Server Listening!\n";
+    std::cout << " Waiting for Bluetooth connection...\n";
+    std::cout << "=========================================\n\n";
 
     InputController inputController;
-    char recvbuf[BUFFER_BUFLEN + 1];
-    sockaddr_in clientAddr;
-    int clientAddrLen = sizeof(clientAddr);
-
-    auto lastRecvTime = std::chrono::high_resolution_clock::now();
-    bool isConnected = false;
-
-    std::cout << "Waiting for connection from Android app..." << std::endl;
 
     while (true) {
-        // Receive packet (blocking)
-        int bytesReceived = recvfrom(serverSocket, recvbuf, BUFFER_BUFLEN, 0, (SOCKADDR*)&clientAddr, &clientAddrLen);
-        auto now = std::chrono::high_resolution_clock::now();
-        double dtMs = std::chrono::duration<double, std::milli>(now - lastRecvTime).count();
-        lastRecvTime = now;
+        SOCKADDR_BTH clientAddr;
+        int clientAddrLen = sizeof(clientAddr);
+        SOCKET clientSocket = accept(listenSocket, (SOCKADDR*)&clientAddr, &clientAddrLen);
+        if (clientSocket == INVALID_SOCKET) {
+            std::cerr << "Accept failed with error: " << WSAGetLastError() << std::endl;
+            continue;
+        }
 
-        if (bytesReceived > 0) {
-            if (!isConnected) {
-                std::cout << "[INFO] Client Connected! Receiving data..." << std::endl;
-                isConnected = true;
+        std::cout << "[INFO] Phone Connected via Bluetooth RFCOMM! Listening for telemetry..." << std::endl;
+
+        std::vector<uint8_t> buffer;
+        char recvChunk[1024];
+
+        while (true) {
+            int bytesRead = recv(clientSocket, recvChunk, sizeof(recvChunk), 0);
+            if (bytesRead <= 0) {
+                std::cout << "[INFO] Phone Disconnected. Waiting for reconnection..." << std::endl;
+                break;
             }
-        } else if (dtMs > 4000.0 && isConnected) {
-            std::cout << "[INFO] Client Disconnected. Waiting for reconnection..." << std::endl;
-            isConnected = false;
-        }
 
-        if (bytesReceived == SOCKET_ERROR) {
-            int err = WSAGetLastError();
-            // WSAETIMEDOUT happens every 500ms if no data arrives. WSAEINTR is normal interruption.
-            if (err != WSAEINTR && err != WSAETIMEDOUT) {
-                std::cerr << "recvfrom failed with error: " << err << std::endl;
-            }
-            continue; // Skip processing
-        }
+            buffer.insert(buffer.end(), recvChunk, recvChunk + bytesRead);
 
-        // Protect against buffer overflow
-        if (bytesReceived < 0) bytesReceived = 0;
-        if (bytesReceived > BUFFER_BUFLEN) bytesReceived = BUFFER_BUFLEN;
+            // Parse binary packets from stream buffer
+            size_t offset = 0;
+            struct QuatFrame { float w, x, y, z; bool valid = false; } latestQuat;
 
-        // Null-terminate the string
-        recvbuf[bytesReceived] = '\0';
-        std::string firstPacket(recvbuf, bytesReceived);
+            while (offset < buffer.size()) {
+                uint8_t packetType = buffer[offset];
 
-        std::vector<std::string> packetsToProcess;
-        std::string latestQuat = "";
-
-        if (firstPacket.rfind("QUAT:", 0) == 0) {
-            latestQuat = firstPacket;
-        } else {
-            packetsToProcess.push_back(firstPacket);
-        }
-
-        // Smart Drain: Pull all pending packets from the OS buffer without blocking
-        u_long bytesAvailable = 0;
-        ioctlsocket(serverSocket, FIONREAD, &bytesAvailable);
-        while (bytesAvailable > 0) {
-            int br = recvfrom(serverSocket, recvbuf, BUFFER_BUFLEN, 0, (SOCKADDR*)&clientAddr, &clientAddrLen);
-            if (br > 0) {
-                recvbuf[br] = '\0';
-                std::string p(recvbuf, br);
-                if (p.rfind("QUAT:", 0) == 0) {
-                    latestQuat = p; // Overwrite older QUAT (drops obsolete mouse movements!)
+                if (packetType == 0x01) { // QUAT: 17 bytes (1 type + 4 floats)
+                    if (buffer.size() - offset < 17) break; // Wait for complete binary frame
+                    memcpy(&latestQuat.w, &buffer[offset + 1], 4);
+                    memcpy(&latestQuat.x, &buffer[offset + 5], 4);
+                    memcpy(&latestQuat.y, &buffer[offset + 9], 4);
+                    memcpy(&latestQuat.z, &buffer[offset + 13], 4);
+                    latestQuat.valid = true;
+                    offset += 17;
+                } else if (packetType == 0x02) { // CLICK: 3 bytes
+                    if (buffer.size() - offset < 3) break;
+                    uint8_t btnId = buffer[offset + 1];
+                    uint8_t actionId = buffer[offset + 2];
+                    char btn = (btnId == 1) ? 'L' : ((btnId == 2) ? 'R' : 'M');
+                    std::string action = (actionId == 1) ? "DOWN" : "UP";
+                    inputController.clickMouse(btn, action);
+                    offset += 3;
+                } else if (packetType == 0x03) { // SCROLL: 3 bytes
+                    if (buffer.size() - offset < 3) break;
+                    int16_t delta;
+                    memcpy(&delta, &buffer[offset + 1], 2);
+                    inputController.scroll(delta);
+                    offset += 3;
+                } else if (packetType == 0x04) { // SENS: 5 bytes
+                    if (buffer.size() - offset < 5) break;
+                    float sens;
+                    memcpy(&sens, &buffer[offset + 1], 4);
+                    inputController.setSensitivity(sens);
+                    offset += 5;
+                } else if (packetType == 0x05) { // DOUBLECLICK: 1 byte
+                    inputController.doubleClick();
+                    offset += 1;
+                } else if (packetType == 0x06) { // SHORTCUT: 2 bytes
+                    if (buffer.size() - offset < 2) break;
+                    uint8_t scId = buffer[offset + 1];
+                    std::string action = "";
+                    if (scId == 1) action = "ESC";
+                    else if (scId == 2) action = "CTRL_C";
+                    else if (scId == 3) action = "CTRL_V";
+                    else if (scId == 4) action = "CTRL_Z";
+                    else if (scId == 5) action = "ALT_TAB";
+                    if (!action.empty()) inputController.executeShortcut(action);
+                    offset += 2;
+                } else if (packetType == 0x07) { // VOL: 2 bytes
+                    if (buffer.size() - offset < 2) break;
+                    int8_t dir = (int8_t)buffer[offset + 1];
+                    inputController.adjustVolume(dir > 0 ? "UP" : "DOWN");
+                    offset += 2;
+                } else if (packetType == 0x08) { // DICT: 3 bytes + N text bytes
+                    if (buffer.size() - offset < 3) break;
+                    uint16_t textLen;
+                    memcpy(&textLen, &buffer[offset + 1], 2);
+                    if (buffer.size() - offset < 3 + textLen) break;
+                    std::string text((char*)&buffer[offset + 3], textLen);
+                    inputController.typeText(text);
+                    offset += 3 + textLen;
+                } else if (packetType == 0xFF) { // PING: 1 byte
+                    offset += 1;
                 } else {
-                    packetsToProcess.push_back(p);
+                    // Unknown byte, skip 1 byte to resync
+                    offset += 1;
                 }
             }
-            ioctlsocket(serverSocket, FIONREAD, &bytesAvailable);
+
+            // Erase processed bytes from buffer
+            buffer.erase(buffer.begin(), buffer.begin() + offset);
+
+            // Execute the latest quaternion movement (smart conflation drops obsolete frames)
+            if (latestQuat.valid) {
+                auto now = std::chrono::high_resolution_clock::now();
+                double timestamp = std::chrono::duration_cast<std::chrono::duration<double>>(
+                    now.time_since_epoch()
+                ).count();
+                inputController.processQuaternion(latestQuat.w, latestQuat.x, latestQuat.y, latestQuat.z, timestamp);
+            }
         }
 
-        // Process the most recent QUAT packet first
-        if (!latestQuat.empty()) {
-            packetsToProcess.insert(packetsToProcess.begin(), latestQuat);
-        }
-
-        // Process Packet Batch
-        for (const std::string& packet : packetsToProcess) {
-        if (packet == "PING") {
-            // Reply with PONG
-            sendto(serverSocket, "PONG", 4, 0, (SOCKADDR*)&clientAddr, clientAddrLen);
-        } else if (packet.rfind("QUAT:", 0) == 0) {
-            // Format: QUAT:w:x:y:z
-            // Relative quaternion from the phone (already has re-center applied)
-            try {
-                size_t p1 = 4;  // after "QUAT"
-                size_t p2 = packet.find(':', p1 + 1);
-                size_t p3 = packet.find(':', p2 + 1);
-                size_t p4 = packet.find(':', p3 + 1);
-                if (p2 != std::string::npos && p3 != std::string::npos && p4 != std::string::npos) {
-                    float w = std::stof(packet.substr(p1 + 1, p2 - p1 - 1));
-                    float x = std::stof(packet.substr(p2 + 1, p3 - p2 - 1));
-                    float y = std::stof(packet.substr(p3 + 1, p4 - p3 - 1));
-                    float z = std::stof(packet.substr(p4 + 1));
-                    
-                    double timestamp = std::chrono::duration_cast<std::chrono::duration<double>>(
-                        now.time_since_epoch()
-                    ).count();
-                    
-                    auto beforeInput = std::chrono::high_resolution_clock::now();
-                    inputController.processQuaternion(w, x, y, z, timestamp);
-                    auto afterInput = std::chrono::high_resolution_clock::now();
-                    double inputDtMs = std::chrono::duration<double, std::milli>(afterInput - beforeInput).count();
-                    if (inputDtMs > 5.0) {
-                        std::cout << "[WARNING] SendInput OS block! Took " << inputDtMs << " ms." << std::endl;
-                    }
-                }
-            } catch (const std::exception& e) {
-                // Ignore malformed packets
-            }
-        } else if (packet.rfind("CLICK:", 0) == 0) {
-            // Format: CLICK:btn:action
-            size_t firstColon = 5;
-            size_t secondColon = packet.find(':', firstColon + 1);
-            if (secondColon != std::string::npos) {
-                char btn = packet[firstColon + 1];
-                std::string action = packet.substr(secondColon + 1);
-                inputController.clickMouse(btn, action);
-            }
-        } else if (packet.rfind("SENS:", 0) == 0) {
-            try {
-                float sens = std::stof(packet.substr(5));
-                inputController.setSensitivity(sens);
-            } catch (const std::exception& e) {}
-        } else if (packet.rfind("DOUBLECLICK:L", 0) == 0) {
-            inputController.doubleClick();
-        } else if (packet.rfind("SCROLL:", 0) == 0) {
-            // Format: SCROLL:delta
-            try {
-                int delta = std::stoi(packet.substr(7));
-                inputController.scroll(delta);
-            } catch (const std::exception& e) {}
-        } else if (packet.rfind("TOUCHPAD:", 0) == 0) {
-            // Format: TOUCHPAD:dx:dy
-            try {
-                size_t p1 = 8;
-                size_t p2 = packet.find(':', p1 + 1);
-                if (p2 != std::string::npos) {
-                    float dx = std::stof(packet.substr(p1 + 1, p2 - p1 - 1));
-                    float dy = std::stof(packet.substr(p2 + 1));
-                    inputController.moveTouchpad(dx, dy);
-                }
-            } catch (const std::exception& e) {}
-        } else if (packet.rfind("SHORTCUT:", 0) == 0) {
-            // Format: SHORTCUT:type
-            std::string type = packet.substr(9);
-            inputController.executeShortcut(type);
-        } else if (packet.rfind("VOL:", 0) == 0) {
-            // Format: VOL:dir
-            std::string dir = packet.substr(4);
-            inputController.adjustVolume(dir);
-        } else if (packet.rfind("DICT:", 0) == 0) {
-            // Format: DICT:text
-            // Format: DICT:text
-            std::string text = packet.substr(5);
-            inputController.typeText(text);
-        }
-        } // End of packet processing loop
+        closesocket(clientSocket);
     }
 
-    // Clean up
-    closesocket(serverSocket);
+    closesocket(listenSocket);
     WSACleanup();
     return 0;
 }

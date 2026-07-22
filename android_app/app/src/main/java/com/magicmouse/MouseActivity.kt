@@ -18,7 +18,6 @@ import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import android.net.wifi.WifiManager
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -28,8 +27,6 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.magicmouse.databinding.ActivityMouseBinding
 import java.util.Locale
 import android.animation.ObjectAnimator
-import android.animation.PropertyValuesHolder
-import android.animation.ValueAnimator
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
 import kotlin.math.abs
@@ -43,12 +40,7 @@ class MouseActivity : AppCompatActivity() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListeningSpeech = false
     private var pulseAnimator: ObjectAnimator? = null
-    private var wifiLock: WifiManager.WifiLock? = null
     
-    // For Touchpad Mode
-    private var lastTouchX = 0f
-    private var lastTouchY = 0f
-
     // For Scroll Area
     private var lastScrollY = 0f
 
@@ -72,37 +64,34 @@ class MouseActivity : AppCompatActivity() {
 
         sharedPreferences = getSharedPreferences("MagicMousePrefs", Context.MODE_PRIVATE)
 
-        val ip = intent.getStringExtra("PC_IP") ?: ""
-        val port = intent.getIntExtra("PC_PORT", 9876)
+        val deviceName = intent.getStringExtra("BT_DEVICE_NAME") ?: "Bluetooth PC"
 
-        binding.connectionStatus.text = "Connected to $ip:$port"
+        binding.connectionStatus.text = "Connected via Bluetooth to $deviceName"
 
-        // Initialize UDP client and Sensors
-        UdpClient.initialize(ip, port)
         sensorHub = SensorHub(this)
         
         // Load saved sensitivity
         val savedSensitivity = sharedPreferences.getFloat("sensitivity", 20.0f)
         sensorHub.sensitivity = savedSensitivity
-        UdpClient.send("SENS:${savedSensitivity.toInt()}")
+        BluetoothClient.sendSensitivity(savedSensitivity)
 
         sensorHub.start()
 
         setupUI()
         animateWelcome()
-        startHeartbeat(ip, port)
+        startHeartbeat(deviceName)
     }
 
-    private fun startHeartbeat(ip: String, port: Int) {
+    private fun startHeartbeat(deviceName: String) {
         lifecycleScope.launch {
             while (true) {
-                val isConnected = UdpClient.ping(ip, port)
+                val isConnected = BluetoothClient.ping()
                 
                 if (isConnected) {
-                    binding.connectionStatus.text = "Connected to $ip:$port"
+                    binding.connectionStatus.text = "Connected via Bluetooth to $deviceName"
                     binding.connectionStatus.setTextColor(getColor(R.color.primary))
                 } else {
-                    binding.connectionStatus.text = "Disconnected! Trying to reconnect..."
+                    binding.connectionStatus.text = "Bluetooth Disconnected! Trying to reconnect..."
                     binding.connectionStatus.setTextColor(getColor(android.R.color.holo_red_light))
                 }
                 delay(2000)
@@ -111,7 +100,6 @@ class MouseActivity : AppCompatActivity() {
     }
 
     private fun animateWelcome() {
-        // Simple entrance animation for core UI elements
         binding.gyroToggleButtonCard.alpha = 0f
         binding.gyroToggleButtonCard.translationY = 50f
         binding.gyroToggleButtonCard.animate().alpha(1f).translationY(0f).setDuration(500).start()
@@ -119,34 +107,6 @@ class MouseActivity : AppCompatActivity() {
         binding.clickLayout.alpha = 0f
         binding.clickLayout.translationY = -50f
         binding.clickLayout.animate().alpha(1f).translationY(0f).setDuration(500).start()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // Prevent Android Wi-Fi Power Save Mode (PSM) from buffering UDP packets for seconds at a time
-        try {
-            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            // WIFI_MODE_FULL_HIGH_PERF is available since API 12 and forces the Wi-Fi chip to stay active
-            wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "MagicMouse:UdpLock")
-            wifiLock?.acquire()
-            Log.d("MouseActivity", "Acquired Wi-Fi high-perf lock")
-        } catch (e: Exception) {
-            Log.e("MouseActivity", "Failed to acquire Wi-Fi lock", e)
-        }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        try {
-            wifiLock?.let {
-                if (it.isHeld) {
-                    it.release()
-                    Log.d("MouseActivity", "Released Wi-Fi high-perf lock")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("MouseActivity", "Failed to release Wi-Fi lock", e)
-        }
     }
 
     private fun applyButtonPressAnimation(view: View, isDown: Boolean) {
@@ -176,7 +136,7 @@ class MouseActivity : AppCompatActivity() {
         // Left Click (Double tap detection + Touch listener)
         leftClickGestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
-                UdpClient.send("DOUBLECLICK:L")
+                BluetoothClient.sendDoubleClick()
                 binding.leftClickButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 return true
             }
@@ -184,66 +144,21 @@ class MouseActivity : AppCompatActivity() {
 
         binding.leftClickButton.setOnTouchListener { v, event ->
             leftClickGestureDetector.onTouchEvent(event)
-            handleMouseClick(v, event, "L", R.color.button_pressed, R.color.surface_container)
+            handleMouseClick(v, event, 'L', R.color.button_pressed, R.color.surface_container)
             true
         }
 
         // Right Click
         binding.rightClickButton.setOnTouchListener { v, event ->
-            handleMouseClick(v, event, "R", R.color.button_pressed, R.color.surface_container)
+            handleMouseClick(v, event, 'R', R.color.button_pressed, R.color.surface_container)
             true
         }
 
         // Middle Click
         binding.middleClickButton.setOnTouchListener { v, event ->
-            handleMouseClick(v, event, "M", R.color.button_pressed, R.color.surface_container)
+            handleMouseClick(v, event, 'M', R.color.button_pressed, R.color.surface_container)
             true
         }
-
-        // Keyboard Shortcuts Strip (Removed in new UI)
-        /*
-        setupShortcutButton(binding.btnEsc, "ESC")
-        setupShortcutButton(binding.btnCtrlC, "CTRL_C")
-        setupShortcutButton(binding.btnCtrlV, "CTRL_V")
-        setupShortcutButton(binding.btnCtrlZ, "CTRL_Z")
-        setupShortcutButton(binding.btnAltTab, "ALT_TAB")
-        */
-
-        // Touchpad Mode Switch (Removed in new UI)
-        /*
-        binding.touchpadModeSwitch.setOnCheckedChangeListener { _, isChecked ->
-            binding.touchpadModeSwitch.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            if (isChecked) {
-                binding.touchpadArea.visibility = View.VISIBLE
-                binding.gyroToggleButtonCard.visibility = View.GONE
-                sensorHub.isTracking = false // Disable gyro when in touchpad mode
-                updateGyroButtonUI()
-            } else {
-                binding.touchpadArea.visibility = View.GONE
-                binding.gyroToggleButtonCard.visibility = View.VISIBLE
-            }
-        }
-
-        // Touchpad Area Logic (Relative Dragging)
-        binding.touchpadArea.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    lastTouchX = event.x
-                    lastTouchY = event.y
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.x - lastTouchX
-                    val dy = event.y - lastTouchY
-                    if (abs(dx) > 1f || abs(dy) > 1f) {
-                        UdpClient.send("TOUCHPAD:$dx:$dy")
-                        lastTouchX = event.x
-                        lastTouchY = event.y
-                    }
-                }
-            }
-            true
-        }
-        */
 
         // Scroll Area Logic (Vertical Dragging)
         binding.scrollArea.setOnTouchListener { _, event ->
@@ -253,11 +168,9 @@ class MouseActivity : AppCompatActivity() {
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = event.y - lastScrollY
-                    // Send scroll delta if movement is significant enough
-                    // Increased threshold from 5f to 40f to drastically lower scroll sensitivity
                     if (abs(dy) > 40f) {
                         val scrollDelta = if (dy > 0) -1 else 1 // Swipe down = scroll up
-                        UdpClient.send("SCROLL:$scrollDelta")
+                        BluetoothClient.sendScroll(scrollDelta)
                         lastScrollY = event.y
                     }
                 }
@@ -277,28 +190,19 @@ class MouseActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleMouseClick(v: View, event: MotionEvent, btn: String, pressedColor: Int, normalColor: Int) {
+    private fun handleMouseClick(v: View, event: MotionEvent, btn: Char, pressedColor: Int, normalColor: Int) {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                UdpClient.send("CLICK:$btn:DOWN")
+                BluetoothClient.sendClick(btn, "DOWN")
                 v.backgroundTintList = ColorStateList.valueOf(getColor(pressedColor))
                 applyButtonPressAnimation(v, true)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                UdpClient.send("CLICK:$btn:UP")
+                BluetoothClient.sendClick(btn, "UP")
                 v.backgroundTintList = ColorStateList.valueOf(getColor(normalColor))
                 applyButtonPressAnimation(v, false)
             }
-        }
-    }
-
-    private fun setupShortcutButton(btn: Button, action: String) {
-        btn.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            UdpClient.send("SHORTCUT:$action")
-            applyButtonPressAnimation(it, true)
-            it.postDelayed({ applyButtonPressAnimation(it, false) }, 100)
         }
     }
 
@@ -320,11 +224,11 @@ class MouseActivity : AppCompatActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             KeyEvent.KEYCODE_VOLUME_UP -> {
-                UdpClient.send("VOL:UP")
+                BluetoothClient.sendVolume("UP")
                 true
             }
             KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                UdpClient.send("VOL:DOWN")
+                BluetoothClient.sendVolume("DOWN")
                 true
             }
             else -> super.onKeyDown(keyCode, event)
@@ -332,7 +236,6 @@ class MouseActivity : AppCompatActivity() {
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        // Prevent volume keyup from making sound
         return when (keyCode) {
             KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN -> true
             else -> super.onKeyUp(keyCode, event)
@@ -373,7 +276,7 @@ class MouseActivity : AppCompatActivity() {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
                         val text = matches[0]
-                        UdpClient.send("DICT:$text")
+                        BluetoothClient.sendDictation(text)
                         Toast.makeText(this@MouseActivity, "Typed: \"$text\"", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -419,7 +322,7 @@ class MouseActivity : AppCompatActivity() {
                 val cleanProgress = if (progress < 1) 1 else progress
                 sensorHub.sensitivity = cleanProgress.toFloat()
                 sensitivityLabel.text = "Sensitivity: $cleanProgress"
-                UdpClient.send("SENS:$cleanProgress")
+                BluetoothClient.sendSensitivity(cleanProgress.toFloat())
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -437,7 +340,7 @@ class MouseActivity : AppCompatActivity() {
         // Setup Disconnect Button
         disconnectBtn.setOnClickListener {
             dialog.dismiss()
-            UdpClient.close()
+            BluetoothClient.close()
             sensorHub.stop()
             
             val intent = Intent(this, WelcomeActivity::class.java)
@@ -452,7 +355,7 @@ class MouseActivity : AppCompatActivity() {
         super.onDestroy()
         pulseAnimator?.cancel()
         sensorHub.stop()
-        UdpClient.close()
+        BluetoothClient.close()
         speechRecognizer?.destroy()
     }
 }

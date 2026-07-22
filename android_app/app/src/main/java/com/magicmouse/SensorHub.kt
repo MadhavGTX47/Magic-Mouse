@@ -113,10 +113,8 @@ class SensorHub(context: Context) : SensorEventListener {
         quaternionInverse(referenceQuaternion!!, refInverse)
         quaternionMultiply(refInverse, currentQuat, relativeQuat)
 
-        // Send the relative quaternion to the PC server.
-        // The PC handles yaw/pitch extraction, sensitivity scaling, smoothing, and cursor placement.
-        // This keeps the phone's job minimal = lower latency.
-        UdpClient.send("QUAT:${relativeQuat[0]}:${relativeQuat[1]}:${relativeQuat[2]}:${relativeQuat[3]}")
+        // Send the relative quaternion to the PC server via Bluetooth.
+        BluetoothClient.sendQuat(relativeQuat[0], relativeQuat[1], relativeQuat[2], relativeQuat[3])
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {

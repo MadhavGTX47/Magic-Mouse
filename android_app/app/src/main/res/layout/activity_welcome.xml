@@ -85,18 +85,18 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
-                    android:text="Enter host details to link devices."
+                    android:text="Select paired PC to link via Bluetooth."
                     android:textColor="@color/on_surface_variant"
                     android:textSize="14sp"
                     android:layout_marginBottom="32dp" />
 
-                <!-- IP Address Field -->
+                <!-- Bluetooth Device Picker Field -->
                 <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/ipInputLayout"
+                    android:id="@+id/deviceInputLayout"
                     android:layout_width="320dp"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
-                    android:hint="PC IP Address"
+                    android:hint="Select Paired PC"
                     app:hintTextColor="@color/primary"
                     app:boxStrokeColor="@color/primary"
                     app:boxStrokeWidth="1dp"
@@ -106,45 +106,27 @@
                     app:boxCornerRadiusBottomStart="12dp"
                     app:boxCornerRadiusBottomEnd="12dp"
                     android:textColorHint="@color/on_surface_variant"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/ipEditText"
+                    <AutoCompleteTextView
+                        android:id="@+id/deviceAutoComplete"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:textColor="@color/on_surface"
-                        android:inputType="textUri"
-                        android:singleLine="true" />
+                        android:inputType="none"
+                        android:padding="16dp" />
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <!-- Port Field -->
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/portInputLayout"
-                    android:layout_width="320dp"
+                <!-- Refresh Devices Button -->
+                <Button
+                    android:id="@+id/refreshButton"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
-                    android:layout_marginTop="16dp"
-                    android:hint="Port"
-                    app:hintTextColor="@color/primary"
-                    app:boxStrokeColor="@color/primary"
-                    app:boxStrokeWidth="1dp"
-                    app:boxStrokeWidthFocused="2dp"
-                    app:boxCornerRadiusTopStart="12dp"
-                    app:boxCornerRadiusTopEnd="12dp"
-                    app:boxCornerRadiusBottomStart="12dp"
-                    app:boxCornerRadiusBottomEnd="12dp"
-                    android:textColorHint="@color/on_surface_variant"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/portEditText"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="8080"
-                        android:textColor="@color/on_surface"
-                        android:inputType="number"
-                        android:singleLine="true" />
-                </com.google.android.material.textfield.TextInputLayout>
+                    android:layout_marginTop="8dp"
+                    android:text="Refresh Paired Devices"
+                    android:textColor="@color/primary" />
 
                 <!-- Connect Button -->
                 <Button
