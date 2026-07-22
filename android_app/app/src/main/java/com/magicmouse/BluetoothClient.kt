@@ -59,9 +59,15 @@ object BluetoothClient {
         }
     }
 
+    private var writerJob1: kotlinx.coroutines.Job? = null
+    private var writerJob2: kotlinx.coroutines.Job? = null
+
     private fun startWriterLoop() {
+        writerJob1?.cancel()
+        writerJob2?.cancel()
+
         // Dedicated coroutine for critical commands (clicks, scrolls, shortcuts)
-        scope.launch {
+        writerJob1 = scope.launch {
             for (packet in sendChannel) {
                 val out = outputStream
                 if (out != null && isConnected) {
@@ -77,7 +83,7 @@ object BluetoothClient {
         }
 
         // Dedicated coroutine for continuous high-frequency mouse movements
-        scope.launch {
+        writerJob2 = scope.launch {
             for (packet in quatChannel) {
                 val out = outputStream
                 if (out != null && isConnected) {
@@ -192,6 +198,10 @@ object BluetoothClient {
 
     fun close() {
         isConnected = false
+        writerJob1?.cancel()
+        writerJob2?.cancel()
+        writerJob1 = null
+        writerJob2 = null
         try {
             outputStream?.close()
             inputStream?.close()

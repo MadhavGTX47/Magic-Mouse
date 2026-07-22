@@ -102,7 +102,9 @@ void parseBinaryBuffer(std::vector<uint8_t>& buffer, InputController& inputContr
         }
     }
 
-    buffer.erase(buffer.begin(), buffer.begin() + offset);
+    if (offset > 0) {
+        buffer.erase(buffer.begin(), buffer.begin() + offset);
+    }
 
     if (latestQuat.valid) {
         auto now = std::chrono::high_resolution_clock::now();

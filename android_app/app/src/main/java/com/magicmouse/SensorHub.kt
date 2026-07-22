@@ -39,9 +39,6 @@ class SensorHub(context: Context) : SensorEventListener {
     private var sensorHandler: Handler? = null
 
     fun start() {
-        // Request SENSOR_DELAY_FASTEST to match high-refresh rate displays dynamically (up to 240Hz)
-        val sensorDelay = SensorManager.SENSOR_DELAY_FASTEST
-        
         // Start background thread for zero-stutter sensor callbacks
         if (sensorThread == null) {
             sensorThread = HandlerThread("MagicMouseSensorThread").apply { start() }

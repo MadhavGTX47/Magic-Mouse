@@ -41,7 +41,7 @@ public:
             double dt = timestamp - lastTime_;
             // Clamp dt to prevent network jitter from creating insanely high frequencies
             // which causes alpha to drop to 0 and freeze the cursor.
-            if (dt < 0.005) dt = 0.005; // Max 200Hz
+            if (dt < 0.001) dt = 0.001; // Max 1000Hz
             if (dt > 0.1) dt = 0.1;     // Min 10Hz
             freq_ = 1.0 / dt;
         }
