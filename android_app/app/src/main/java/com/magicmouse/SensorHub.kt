@@ -38,8 +38,8 @@ class SensorHub(context: Context) : SensorEventListener {
     private var sensorHandler: Handler? = null
 
     fun start() {
-        // Request exactly 120Hz (8333 microseconds) to prevent overwhelming the Wi-Fi chip
-        val SENSOR_DELAY_MICROS = 8333
+        // Request SENSOR_DELAY_FASTEST to match high-refresh rate displays dynamically (up to 240Hz)
+        val sensorDelay = SensorManager.SENSOR_DELAY_FASTEST
         
         // Start background thread for zero-stutter sensor callbacks
         if (sensorThread == null) {
@@ -48,16 +48,14 @@ class SensorHub(context: Context) : SensorEventListener {
         }
 
         if (rotationVectorSensor != null) {
-            sensorManager.registerListener(this, rotationVectorSensor, SENSOR_DELAY_MICROS, sensorHandler)
-            Log.d(TAG, "Rotation vector sensor tracking started (9-axis fused, 120Hz)")
+            sensorManager.registerListener(this, rotationVectorSensor, sensorDelay, sensorHandler)
+            Log.d(TAG, "Rotation vector sensor tracking started (9-axis fused, MAX Hz)")
         } else {
             Log.e(TAG, "Rotation vector sensor not available! Falling back to game rotation vector...")
-            // Fallback: GAME_ROTATION_VECTOR uses gyro + accelerometer (no magnetometer)
-            // Yaw may drift slowly but pitch/roll are stable
             val gameRotation = sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
             if (gameRotation != null) {
-                sensorManager.registerListener(this, gameRotation, SENSOR_DELAY_MICROS, sensorHandler)
-                Log.d(TAG, "Game rotation vector sensor tracking started (6-axis fused, 120Hz)")
+                sensorManager.registerListener(this, gameRotation, sensorDelay, sensorHandler)
+                Log.d(TAG, "Game rotation vector sensor tracking started (6-axis fused, MAX Hz)")
             } else {
                 Log.e(TAG, "No rotation vector sensors available on this device!")
             }

@@ -16,19 +16,48 @@ InputController::InputController()
     , prevPitch_(0.0f)
     , remainderX_(0.0f)
     , remainderY_(0.0f)
-    , yawFilter_(120.0, 0.8, 0.05, 1.0)
-    , pitchFilter_(120.0, 0.8, 0.05, 1.0)
+    , refreshRate_(60)
+    , yawFilter_(240.0, 0.8, 0.05, 1.0)
+    , pitchFilter_(240.0, 0.8, 0.05, 1.0)
 {
-    // Cache screen resolution at startup
     screenWidth_ = GetSystemMetrics(SM_CXSCREEN);
     screenHeight_ = GetSystemMetrics(SM_CYSCREEN);
-    std::cout << "Screen resolution: " << screenWidth_ << "x" << screenHeight_ << std::endl;
+
+    DEVMODE devMode = {0};
+    devMode.dmSize = sizeof(devMode);
+    if (EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devMode) && devMode.dmDisplayFrequency > 0) {
+        refreshRate_ = devMode.dmDisplayFrequency;
+    }
+
+    yawFilter_ = OneEuroFilter((double)refreshRate_, 0.8, 0.05, 1.0);
+    pitchFilter_ = OneEuroFilter((double)refreshRate_, 0.8, 0.05, 1.0);
+
+    std::cout << "Screen resolution: " << screenWidth_ << "x" << screenHeight_ 
+              << " @ " << refreshRate_ << " Hz" << std::endl;
 }
 
 InputController::~InputController() {}
 
 void InputController::setSensitivity(float sens) {
     sensitivity_ = sens;
+}
+
+void InputController::recenter() {
+    firstReading_ = true;
+    remainderX_ = 0.0f;
+    remainderY_ = 0.0f;
+    yawFilter_.reset();
+    pitchFilter_.reset();
+
+    // Snap cursor directly to screen center
+    if (screenWidth_ > 1 && screenHeight_ > 1) {
+        INPUT input = {0};
+        input.type = INPUT_MOUSE;
+        input.mi.dx = 32767;
+        input.mi.dy = 32767;
+        input.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE;
+        SendInput(1, &input, sizeof(INPUT));
+    }
 }
 
 /**

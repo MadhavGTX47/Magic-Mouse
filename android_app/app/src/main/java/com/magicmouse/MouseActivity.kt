@@ -122,6 +122,7 @@ class MouseActivity : AppCompatActivity() {
             sensorHub.isTracking = !sensorHub.isTracking
             if (sensorHub.isTracking) {
                 sensorHub.recenter()
+                BluetoothClient.sendRecenter()
             }
             updateGyroButtonUI()
         }
@@ -130,6 +131,7 @@ class MouseActivity : AppCompatActivity() {
         binding.recenterButton.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
             sensorHub.recenter()
+            BluetoothClient.sendRecenter()
             Toast.makeText(this, "Re-centered!", Toast.LENGTH_SHORT).show()
         }
 
@@ -334,6 +336,7 @@ class MouseActivity : AppCompatActivity() {
         // Setup Re-center Button
         calibrateBtn.setOnClickListener {
             sensorHub.recenter()
+            BluetoothClient.sendRecenter()
             Toast.makeText(this, "Re-centered!", Toast.LENGTH_SHORT).show()
         }
 

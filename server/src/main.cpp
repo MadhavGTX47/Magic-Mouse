@@ -172,6 +172,9 @@ int main() {
                     std::string text((char*)&buffer[offset + 3], textLen);
                     inputController.typeText(text);
                     offset += 3 + textLen;
+                } else if (packetType == 0x09) { // RECENTER: 1 byte
+                    inputController.recenter();
+                    offset += 1;
                 } else if (packetType == 0xFF) { // PING: 1 byte
                     offset += 1;
                 } else {

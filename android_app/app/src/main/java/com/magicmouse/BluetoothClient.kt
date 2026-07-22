@@ -168,6 +168,11 @@ object BluetoothClient {
         sendChannel.trySend(buffer.array())
     }
 
+    fun sendRecenter() {
+        val buffer = byteArrayOf(0x09.toByte())
+        sendChannel.trySend(buffer)
+    }
+
     suspend fun ping(): Boolean = withContext(Dispatchers.IO) {
         val out = outputStream
         val input = inputStream

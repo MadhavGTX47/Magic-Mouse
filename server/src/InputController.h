@@ -32,6 +32,9 @@ public:
     // Scroll the mouse wheel
     void scroll(int delta);
 
+    // Re-center cursor to screen center and reset filter baseline
+    void recenter();
+
     // Move mouse relative (for touchpad mode)
     void moveTouchpad(float dx, float dy);
 
@@ -48,6 +51,7 @@ private:
 
     int screenWidth_;
     int screenHeight_;
+    int refreshRate_;
 
     OneEuroFilter yawFilter_;
     OneEuroFilter pitchFilter_;
