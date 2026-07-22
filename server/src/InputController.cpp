@@ -11,8 +11,8 @@
 
 InputController::InputController()
     : sensitivity_(100.0f)
-    , yawFilter_(60.0, 1.0, 0.05, 1.0)
-    , pitchFilter_(60.0, 1.0, 0.05, 1.0)
+    , yawFilter_(120.0, 0.25, 0.15, 1.0)
+    , pitchFilter_(120.0, 0.25, 0.15, 1.0)
     , firstReading_(true)
 {
     // Cache screen resolution at startup
@@ -57,18 +57,17 @@ void InputController::quaternionToYawPitch(float w, float x, float y, float z, f
 /**
  * Process an incoming relative quaternion from the phone.
  * 
- * The phone has already computed Q_relative = Q_ref_inverse * Q_current,
- * so this quaternion represents the phone's rotation RELATIVE to where
- * the user was pointing when they last pressed "re-center".
- * 
- * We extract yaw and pitch, pass them through a 1 Euro filter to
- * eliminate micro-jitter dynamically, scale by sensitivity, and set the cursor position.
+ * High-Precision Sub-Pixel Algorithm:
+ * 1. 1 Euro Filter with mincutoff=0.25Hz eliminates micro-shaking while keeping fast moves instantaneous.
+ * 2. Continuous Cubic Hermite soft noise gate removes sensor thermal noise with zero step artifact.
+ * 3. 1:1 linear micro-precision below 1 degree allows pixel-perfect targeting of desktop UI elements.
+ * 4. Sub-pixel floating point mapping directly to Windows 65535 coordinate grid for butter-smooth tracking.
  */
 void InputController::processQuaternion(float w, float x, float y, float z, double timestamp) {
     float yawDeg, pitchDeg;
     quaternionToYawPitch(w, x, y, z, yawDeg, pitchDeg);
 
-    // Check for NaN which can cause a hardware exception on integer cast
+    // Check for NaN
     if (std::isnan(yawDeg) || std::isnan(pitchDeg)) return;
 
     // On first reading after a re-center, snap directly (no smoothing lag)
@@ -78,40 +77,56 @@ void InputController::processQuaternion(float w, float x, float y, float z, doub
         firstReading_ = false;
     }
 
-    // Apply 1 Euro Filter
+    // Apply 1 Euro Filter (120Hz tuned)
     float filteredYaw = yawFilter_.filter(yawDeg, timestamp);
     float filteredPitch = pitchFilter_.filter(pitchDeg, timestamp);
 
-    // Calculate delta from center (where user was pointing at re-center)
-    float deltaYaw = filteredYaw;
-    float deltaPitch = filteredPitch;
+    // Soft Cubic Hermite noise gate to eliminate step artifacts
+    auto applySoftGate = [](float val, float gateThreshold) -> float {
+        float absVal = std::abs(val);
+        if (absVal < gateThreshold) {
+            float t = absVal / gateThreshold;
+            float factor = t * t * (3.0f - 2.0f * t); // Smooth C1 curve
+            return val * factor;
+        }
+        return val;
+    };
 
-    // Dead zone filter (ignore micro-jitter)
-    if (std::abs(deltaYaw) < 0.15f) deltaYaw = 0.0f;
-    if (std::abs(deltaPitch) < 0.15f) deltaPitch = 0.0f;
+    float smoothYaw = applySoftGate(filteredYaw, 0.18f);
+    float smoothPitch = applySoftGate(filteredPitch, 0.18f);
 
-    // Mouse Acceleration Curve (non-linear scaling)
-    float accelYaw = deltaYaw * std::pow(std::abs(deltaYaw / 10.0f) + 1.0f, 0.5f);
-    float accelPitch = deltaPitch * std::pow(std::abs(deltaPitch / 10.0f) + 1.0f, 0.5f);
+    // Precision acceleration curve: 1:1 linear for micro-movement (< 1.0 deg), dynamic scaling for fast movement
+    auto accelCurve = [](float d) -> float {
+        float absD = std::abs(d);
+        if (absD <= 1.0f) {
+            return d; // 1:1 ultra-precise linear response for micro-targeting
+        }
+        float accelFactor = 1.0f + 0.35f * (absD - 1.0f);
+        return d * accelFactor;
+    };
 
-    // X-Axis inverted (Left is left, Right is right)
-    int cursorX = screenCenterX_ - (int)(accelYaw * sensitivity_);
-    int cursorY = screenCenterY_ - (int)(accelPitch * sensitivity_);  // Inverted: pitch up = screen up = lower Y
+    float accelYaw = accelCurve(smoothYaw);
+    float accelPitch = accelCurve(smoothPitch);
+
+    // Compute continuous sub-pixel target coordinates
+    float targetX = (float)screenCenterX_ - (accelYaw * sensitivity_);
+    float targetY = (float)screenCenterY_ - (accelPitch * sensitivity_); // Pitch up = lower Y
 
     // Clamp to screen bounds
-    if (cursorX < 0) cursorX = 0;
-    if (cursorX >= screenWidth_) cursorX = screenWidth_ - 1;
-    if (cursorY < 0) cursorY = 0;
-    if (cursorY >= screenHeight_) cursorY = screenHeight_ - 1;
+    if (targetX < 0.0f) targetX = 0.0f;
+    if (targetX > (float)(screenWidth_ - 1)) targetX = (float)(screenWidth_ - 1);
+    if (targetY < 0.0f) targetY = 0.0f;
+    if (targetY > (float)(screenHeight_ - 1)) targetY = (float)(screenHeight_ - 1);
 
-    // Use SendInput with absolute coordinates for pixel-perfect placement.
-    // MOUSEEVENTF_ABSOLUTE uses a 0..65535 coordinate system mapped to the screen.
-    INPUT input = {0};
-    input.type = INPUT_MOUSE;
-    // Prevent divide by zero if screen bounds are invalid
+    // Map sub-pixel floating point position directly to Windows SendInput 65535 coordinate grid
     if (screenWidth_ > 1 && screenHeight_ > 1) {
-        input.mi.dx = (LONG)((cursorX * 65535) / (screenWidth_ - 1));
-        input.mi.dy = (LONG)((cursorY * 65535) / (screenHeight_ - 1));
+        LONG winDx = (LONG)((targetX * 65535.0f) / (float)(screenWidth_ - 1));
+        LONG winDy = (LONG)((targetY * 65535.0f) / (float)(screenHeight_ - 1));
+
+        INPUT input = {0};
+        input.type = INPUT_MOUSE;
+        input.mi.dx = winDx;
+        input.mi.dy = winDy;
         input.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE;
         SendInput(1, &input, sizeof(INPUT));
     }
