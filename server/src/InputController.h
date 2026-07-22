@@ -51,6 +51,8 @@ private:
 
     int screenWidth_;
     int screenHeight_;
+    int screenCenterX_;
+    int screenCenterY_;
     int refreshRate_;
 
     OneEuroFilter yawFilter_;
