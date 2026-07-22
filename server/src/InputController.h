@@ -39,12 +39,15 @@ public:
     void executeShortcut(const std::string& shortcut);
 
 private:
-    float sensitivity_;     // Pixels per degree of rotation
-    bool firstReading_;     // Whether this is the first quaternion after reset
-    int screenWidth_;       // Cached screen resolution
+    float sensitivity_;
+    bool firstReading_;
+    float prevYaw_;
+    float prevPitch_;
+    float remainderX_;
+    float remainderY_;
+
+    int screenWidth_;
     int screenHeight_;
-    int screenCenterX_;
-    int screenCenterY_;
 
     OneEuroFilter yawFilter_;
     OneEuroFilter pitchFilter_;
