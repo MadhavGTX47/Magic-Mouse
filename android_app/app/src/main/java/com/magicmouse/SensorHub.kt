@@ -19,6 +19,7 @@ class SensorHub(context: Context) : SensorEventListener {
 
     var isTracking = false
     var sensitivity = 15.0f  // Degrees to pixels multiplier
+    var connMode: String = "BT"
 
     // Reference quaternion captured on re-center.
     // All subsequent readings are computed relative to this reference.
@@ -111,8 +112,12 @@ class SensorHub(context: Context) : SensorEventListener {
         quaternionInverse(referenceQuaternion!!, refInverse)
         quaternionMultiply(refInverse, currentQuat, relativeQuat)
 
-        // Send the relative quaternion to the PC server via Bluetooth.
-        BluetoothClient.sendQuat(relativeQuat[0], relativeQuat[1], relativeQuat[2], relativeQuat[3])
+        // Send the relative quaternion to the PC server via Bluetooth or Wi-Fi
+        if (connMode == "WIFI") {
+            UdpClient.sendQuat(relativeQuat[0], relativeQuat[1], relativeQuat[2], relativeQuat[3])
+        } else {
+            BluetoothClient.sendQuat(relativeQuat[0], relativeQuat[1], relativeQuat[2], relativeQuat[3])
+        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {

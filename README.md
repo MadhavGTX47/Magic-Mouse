@@ -1,45 +1,51 @@
 # MagicMouse
 
-An Android air mouse for Windows that actually feels good to use. 
+An Android air mouse for Windows that actually feels natural to use.
 
-Most air mouse apps suffer from terrible cursor drift because they only use raw gyroscope data. MagicMouse combines 9-axis sensor fusion (gyro, accelerometer, magnetometer) on the phone with a C++ 1 Euro Filter on the PC to keep the cursor smooth and stable.
-
-## How it Works (Under the Hood)
-- **Android App:** Reads `TYPE_ROTATION_VECTOR` at maximum hardware frequency (matching high refresh displays dynamically) for absolute 3D orientation. Tapping "Re-center" synchronizes baselines on both phone and PC server, snapping the cursor smoothly to screen center.
-- **Networking:** Streams data over a dedicated Bluetooth RFCOMM connection using a 17-byte **Compact Binary Protocol**, eliminating Wi-Fi signal congestion and router bufferbloat while keeping latency sub-5ms.
-- **Windows Server:** A lightweight C++ background app using Winsock `AF_BTH`. It queries display hardware settings on-the-fly (`EnumDisplaySettings`) to dynamically match high-refresh rate monitors (e.g. **240 Hz**), filtering orientation deltas without frame-mismatch stutter.
+Most smartphone mouse apps get frustrating quickly. They rely on basic gyroscope data, which causes the cursor to drift across your screen within seconds. MagicMouse fixes this by combining 9-axis sensor fusion (gyroscope, accelerometer, and magnetometer) on your phone with a C++ 1 Euro Filter on your PC, keeping cursor movement steady and accurate.
 
 ---
 
-> [!TIP]
-> **Bluetooth Mode (Zero Network Jitter)**: MagicMouse on this branch operates completely over Bluetooth. Pair your phone with your PC in Windows Settings first, then launch the app to select your PC from the paired devices list.
+## Why Dual Connection Modes? (Bluetooth + Wi-Fi)
+
+When you first open the app, you can choose how your phone connects to your PC:
+
+1. **Bluetooth RFCOMM (Recommended)**:
+   - **Why we added this**: Standard Wi-Fi networks in homes and offices often suffer from network congestion, router bufferbloat, and random latency spikes. When streaming high-frequency 240Hz sensor packets over Wi-Fi, these hiccups make cursor movement feel jumpy or delayed. Bluetooth RFCOMM provides a direct point-to-point wireless link that avoids Wi-Fi network traffic completely, delivering consistent, low-latency tracking.
+2. **Wi-Fi UDP**:
+   - Ideal when your PC does not have built-in Bluetooth hardware or when you want to control your PC from another room on the same local network.
 
 ---
 
-## Features
-- **Dynamic High Refresh Rate (240Hz+):** Automatically detects your monitor's display frequency (e.g., 240 Hz) and tunes the 1 Euro Filter and Android sensor pipeline for butter-smooth high-Hz gaming and desktop responsiveness.
-- **Instant Server-Synchronized Re-center:** Tapping "Re-center" instantly resets filter baselines on both phone and C++ server, smoothly centering the pointer without position jumps.
-- **Relative Delta Velocity Motion:** Works like an optical desktop mouse—rest your wrist anywhere comfortably. Move the cursor smoothly without arm fatigue or position snapping.
-- **Sub-Pixel Fractional Remainder Accumulation:** Prevents truncation jitter on micro-movements, ensuring butter-smooth high-Hz tracking.
-- **Compact Binary Protocol:** Ultra-lean 17-byte telemetry packets for minimum latency over Bluetooth RFCOMM.
-- **Core Controls:** Left/Right/Middle clicks, double-tap, and a dedicated scroll strip.
-- **Extras:** Physical volume button controls, customizable sensitivity, built-in shortcuts (Esc, Ctrl+C/V, Alt+Tab), and speech-to-text dictation.
+## Technical Highlights
 
-## Getting Started
+- **Absolute Pointer Mapping**: Maps phone orientation directly to screen position. Pointing at the screen center targets the center of your monitor with zero position drift.
+- **Dynamic High Refresh Rate (240Hz)**: The C++ server automatically detects your monitor's refresh rate (`EnumDisplaySettings`) and adjusts filter parameters on-the-fly for high-refresh displays.
+- **Instant Server-Synchronized Re-center**: Tapping "Re-center" resets orientation baselines on both the phone and the server simultaneously, bringing your cursor right back to the center of your screen.
+- **Compact Telemetry Protocol**: Streams 17-byte binary packets for minimal overhead over both Bluetooth and Wi-Fi.
+- **Full Media & Accessibility Controls**: Left, right, and middle clicks, double-tap, vertical scroll strip, physical volume button control, keyboard shortcuts, and voice dictation.
 
-### 1. Build & Run the Windows Server
-Requires `g++` (via MinGW / MSYS2). Open your terminal in the `server` directory and run:
+---
+
+## Quick Setup Guide
+
+### 1. Start the Windows Server
+Build and launch the background server using `g++` (via MinGW / MSYS2):
 
 ```cmd
+cd server
 g++ src/main.cpp src/InputController.cpp -o MagicMouseServer.exe -lws2_32 -luser32
 ./MagicMouseServer.exe
 ```
-This will start the Bluetooth RFCOMM server and listen for connections.
 
-### 2. Build & Install the Android App
-Requires Android SDK. Open your terminal in the `android_app` directory and run:
+The server automatically listens on both Bluetooth RFCOMM and Wi-Fi UDP (port 9876).
+
+### 2. Install the Android App
+Build the APK using Gradle:
 
 ```cmd
+cd android_app
 ./gradlew assembleDebug
 ```
-Install the generated APK located at `app/build/outputs/apk/debug/app-debug.apk` to your phone, select your paired PC, and connect!
+
+Install the APK on your phone, open **MagicMouse**, select **Bluetooth** or **Wi-Fi (UDP)**, and tap **Connect**!

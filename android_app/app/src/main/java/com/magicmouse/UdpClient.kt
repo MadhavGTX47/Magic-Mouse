@@ -15,12 +15,9 @@ object UdpClient {
     private var pcAddress: InetAddress? = null
     private var pcPort: Int = 9876
     private val scope = CoroutineScope(Dispatchers.IO)
-    // Use UNLIMITED channel: We must not drop packets! Dropping packets causes clicks to disappear
-    // and causes jerky tracking. We already fixed the underlying freezes via HandlerThread.
-    private val sendChannel = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
-    
     // Use CONFLATED channel for continuous mouse movements to completely drop obsolete frames during Wi-Fi lag spikes!
-    private val quatChannel = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    private val quatChannel = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    private val sendChannel = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.UNLIMITED)
 
     fun initialize(ipAddress: String, port: Int) {
         scope.launch {
@@ -38,16 +35,15 @@ object UdpClient {
         
         // Dedicated coroutine to send critical packets (clicks, scrolls) sequentially
         scope.launch {
-            for (message in sendChannel) {
+            for (bytes in sendChannel) {
                 val s = socket
                 val addr = pcAddress
                 if (s != null && addr != null) {
                     try {
-                        val bytes = message.toByteArray()
                         val packet = DatagramPacket(bytes, bytes.size, addr, pcPort)
                         s.send(packet)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error sending packet: $message", e)
+                        Log.e(TAG, "Error sending packet", e)
                     }
                 }
             }
@@ -55,12 +51,11 @@ object UdpClient {
 
         // Dedicated coroutine to send mouse movements. Will automatically drop obsolete frames if network blocks!
         scope.launch {
-            for (message in quatChannel) {
+            for (bytes in quatChannel) {
                 val s = socket
                 val addr = pcAddress
                 if (s != null && addr != null) {
                     try {
-                        val bytes = message.toByteArray()
                         val packet = DatagramPacket(bytes, bytes.size, addr, pcPort)
                         s.send(packet)
                     } catch (e: Exception) {
@@ -71,16 +66,68 @@ object UdpClient {
         }
     }
 
+    fun sendQuat(w: Float, x: Float, y: Float, z: Float) {
+        val buffer = java.nio.ByteBuffer.allocate(17).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buffer.put(0x01.toByte())
+        buffer.putFloat(w)
+        buffer.putFloat(x)
+        buffer.putFloat(y)
+        buffer.putFloat(z)
+        quatChannel.trySend(buffer.array())
+    }
+
+    fun sendClick(button: String, action: String) {
+        val btnByte = if (button == "L") 0x01.toByte() else 0x02.toByte()
+        val actByte = if (action == "DOWN") 0x01.toByte() else 0x00.toByte()
+        val buffer = byteArrayOf(0x02.toByte(), btnByte, actByte)
+        sendChannel.trySend(buffer)
+    }
+
+    fun sendScroll(delta: Int) {
+        val buffer = java.nio.ByteBuffer.allocate(3).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buffer.put(0x03.toByte())
+        buffer.putShort(delta.toShort())
+        sendChannel.trySend(buffer.array())
+    }
+
+    fun sendSensitivity(sens: Float) {
+        val buffer = java.nio.ByteBuffer.allocate(5).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buffer.put(0x04.toByte())
+        buffer.putFloat(sens)
+        sendChannel.trySend(buffer.array())
+    }
+
+    fun sendDoubleClick() {
+        val buffer = byteArrayOf(0x05.toByte())
+        sendChannel.trySend(buffer)
+    }
+
+    fun sendShortcut(shortcutId: Int) {
+        val buffer = byteArrayOf(0x06.toByte(), shortcutId.toByte())
+        sendChannel.trySend(buffer)
+    }
+
+    fun sendVol(direction: Int) {
+        val buffer = byteArrayOf(0x07.toByte(), direction.toByte())
+        sendChannel.trySend(buffer)
+    }
+
+    fun sendDictation(text: String) {
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        val buffer = java.nio.ByteBuffer.allocate(3 + bytes.size).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buffer.put(0x08.toByte())
+        buffer.putShort(bytes.size.toShort())
+        buffer.put(bytes)
+        sendChannel.trySend(buffer.array())
+    }
+
+    fun sendRecenter() {
+        val buffer = byteArrayOf(0x09.toByte())
+        sendChannel.trySend(buffer)
+    }
+
     fun send(message: String) {
-        // Offer message to the appropriate channel immediately, non-blocking
-        if (message.startsWith("QUAT:")) {
-            quatChannel.trySend(message)
-        } else {
-            val result = sendChannel.trySend(message)
-            if (result.isFailure) {
-                Log.e(TAG, "Failed to queue packet: $message")
-            }
-        }
+        sendChannel.trySend(message.toByteArray())
     }
 
     suspend fun ping(ipAddress: String, port: Int): Boolean = withContext(Dispatchers.IO) {

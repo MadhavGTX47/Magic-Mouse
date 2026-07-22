@@ -41,6 +41,30 @@ class WelcomeActivity : AppCompatActivity() {
 
         animateEntrance()
 
+        val savedIp = sharedPreferences.getString("pc_ip", "")
+        val savedPort = sharedPreferences.getInt("pc_port", 9876)
+        binding.ipEditText.setText(savedIp)
+        binding.portEditText.setText(savedPort.toString())
+
+        val savedMode = sharedPreferences.getString("conn_mode", "BT")
+        if (savedMode == "WIFI") {
+            binding.modeToggleGroup.check(binding.btnModeWifi.id)
+            showWifiContainer()
+        } else {
+            binding.modeToggleGroup.check(binding.btnModeBluetooth.id)
+            showBluetoothContainer()
+        }
+
+        binding.modeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                if (checkedId == binding.btnModeBluetooth.id) {
+                    showBluetoothContainer()
+                } else if (checkedId == binding.btnModeWifi.id) {
+                    showWifiContainer()
+                }
+            }
+        }
+
         checkAndRequestPermissions()
 
         binding.refreshButton.setOnClickListener {
@@ -48,15 +72,31 @@ class WelcomeActivity : AppCompatActivity() {
         }
 
         binding.connectButton.setOnClickListener {
-            val device = selectedDevice
-            if (device == null) {
-                binding.deviceInputLayout.error = "Please select a paired PC"
-                return@setOnClickListener
+            val isWifi = binding.modeToggleGroup.checkedButtonId == binding.btnModeWifi.id
+            if (isWifi) {
+                connectViaWifi()
+            } else {
+                val device = selectedDevice
+                if (device == null) {
+                    binding.deviceInputLayout.error = "Please select a paired PC"
+                    return@setOnClickListener
+                }
+                binding.deviceInputLayout.error = null
+                connectToBluetoothDevice(device)
             }
-            binding.deviceInputLayout.error = null
-
-            connectToBluetoothDevice(device)
         }
+    }
+
+    private fun showBluetoothContainer() {
+        binding.bluetoothContainer.visibility = View.VISIBLE
+        binding.wifiContainer.visibility = View.GONE
+        sharedPreferences.edit().putString("conn_mode", "BT").apply()
+    }
+
+    private fun showWifiContainer() {
+        binding.bluetoothContainer.visibility = View.GONE
+        binding.wifiContainer.visibility = View.VISIBLE
+        sharedPreferences.edit().putString("conn_mode", "WIFI").apply()
     }
 
     private fun checkAndRequestPermissions() {
@@ -175,6 +215,7 @@ class WelcomeActivity : AppCompatActivity() {
 
                     // Go to MouseActivity
                     val intent = Intent(this@WelcomeActivity, MouseActivity::class.java).apply {
+                        putExtra("CONN_MODE", "BT")
                         putExtra("BT_DEVICE_ADDRESS", device.address)
                         putExtra("BT_DEVICE_NAME", device.name ?: device.address)
                     }
@@ -182,6 +223,55 @@ class WelcomeActivity : AppCompatActivity() {
                     finish()
                 } else {
                     binding.statusText.text = "Bluetooth connection failed! Ensure PC server is running."
+                    binding.statusText.setTextColor(getColor(android.R.color.holo_red_light))
+                }
+            }
+        }
+    }
+
+    private fun connectViaWifi() {
+        val ip = binding.ipEditText.text.toString().trim()
+        val portStr = binding.portEditText.text.toString().trim()
+
+        if (ip.isEmpty()) {
+            binding.ipInputLayout.error = "IP address is required"
+            return
+        }
+        binding.ipInputLayout.error = null
+
+        val port = portStr.toIntOrNull() ?: 9876
+        binding.connectButton.isEnabled = false
+        binding.statusText.visibility = View.VISIBLE
+        binding.statusText.text = "Connecting via Wi-Fi to $ip:$port..."
+        binding.statusText.setTextColor(getColor(R.color.text_secondary))
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val isSuccess = UdpClient.ping(ip, port)
+
+            withContext(Dispatchers.Main) {
+                binding.connectButton.isEnabled = true
+                if (isSuccess) {
+                    binding.statusText.text = "Connected via Wi-Fi!"
+                    binding.statusText.setTextColor(getColor(R.color.cyan_accent))
+
+                    UdpClient.initialize(ip, port)
+
+                    sharedPreferences.edit().apply {
+                        putString("pc_ip", ip)
+                        putInt("pc_port", port)
+                        putString("conn_mode", "WIFI")
+                        apply()
+                    }
+
+                    val intent = Intent(this@WelcomeActivity, MouseActivity::class.java).apply {
+                        putExtra("CONN_MODE", "WIFI")
+                        putExtra("PC_IP", ip)
+                        putExtra("PC_PORT", port)
+                    }
+                    startActivity(intent)
+                    finish()
+                } else {
+                    binding.statusText.text = "Wi-Fi connection failed! Ensure PC server is running and on same network."
                     binding.statusText.setTextColor(getColor(android.R.color.holo_red_light))
                 }
             }

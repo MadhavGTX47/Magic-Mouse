@@ -47,6 +47,8 @@ class MouseActivity : AppCompatActivity() {
     // For Double Tap
     private lateinit var leftClickGestureDetector: GestureDetector
 
+    private var connMode = "BT"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMouseBinding.inflate(layoutInflater)
@@ -64,16 +66,24 @@ class MouseActivity : AppCompatActivity() {
 
         sharedPreferences = getSharedPreferences("MagicMousePrefs", Context.MODE_PRIVATE)
 
-        val deviceName = intent.getStringExtra("BT_DEVICE_NAME") ?: "Bluetooth PC"
+        connMode = intent.getStringExtra("CONN_MODE") ?: "BT"
+        val deviceName = if (connMode == "WIFI") {
+            val ip = intent.getStringExtra("PC_IP") ?: "Wi-Fi PC"
+            val port = intent.getIntExtra("PC_PORT", 9876)
+            "$ip:$port"
+        } else {
+            intent.getStringExtra("BT_DEVICE_NAME") ?: "Bluetooth PC"
+        }
 
-        binding.connectionStatus.text = "Connected via Bluetooth to $deviceName"
+        binding.connectionStatus.text = "Connected via $connMode to $deviceName"
 
         sensorHub = SensorHub(this)
+        sensorHub.connMode = connMode
         
         // Load saved sensitivity
         val savedSensitivity = sharedPreferences.getFloat("sensitivity", 20.0f)
         sensorHub.sensitivity = savedSensitivity
-        BluetoothClient.sendSensitivity(savedSensitivity)
+        sendSensitivity(savedSensitivity)
 
         sensorHub.start()
 
@@ -85,18 +95,73 @@ class MouseActivity : AppCompatActivity() {
     private fun startHeartbeat(deviceName: String) {
         lifecycleScope.launch {
             while (true) {
-                val isConnected = BluetoothClient.ping()
+                val isConnected = if (connMode == "WIFI") true else BluetoothClient.ping()
                 
                 if (isConnected) {
-                    binding.connectionStatus.text = "Connected via Bluetooth to $deviceName"
+                    binding.connectionStatus.text = "Connected via $connMode to $deviceName"
                     binding.connectionStatus.setTextColor(getColor(R.color.primary))
                 } else {
-                    binding.connectionStatus.text = "Bluetooth Disconnected! Trying to reconnect..."
+                    binding.connectionStatus.text = "$connMode Disconnected! Trying to reconnect..."
                     binding.connectionStatus.setTextColor(getColor(android.R.color.holo_red_light))
                 }
                 delay(2000)
             }
         }
+    }
+
+    private fun sendClick(button: String, action: String) {
+        if (connMode == "WIFI") UdpClient.sendClick(button, action)
+        else BluetoothClient.sendClick(if (button.isNotEmpty()) button[0] else 'L', action)
+    }
+
+    private fun sendScroll(delta: Int) {
+        if (connMode == "WIFI") UdpClient.sendScroll(delta)
+        else BluetoothClient.sendScroll(delta)
+    }
+
+    private fun sendSensitivity(sens: Float) {
+        if (connMode == "WIFI") UdpClient.sendSensitivity(sens)
+        else BluetoothClient.sendSensitivity(sens)
+    }
+
+    private fun sendDoubleClick() {
+        if (connMode == "WIFI") UdpClient.sendDoubleClick()
+        else BluetoothClient.sendDoubleClick()
+    }
+
+    private fun sendShortcut(shortcutName: String) {
+        if (connMode == "WIFI") {
+            val scId = when(shortcutName) {
+                "ESC" -> 1; "CTRL_C" -> 2; "CTRL_V" -> 3; "CTRL_Z" -> 4; "ALT_TAB" -> 5; else -> 1
+            }
+            UdpClient.sendShortcut(scId)
+        } else {
+            BluetoothClient.sendShortcut(shortcutName)
+        }
+    }
+
+    private fun sendVolume(direction: String) {
+        if (connMode == "WIFI") {
+            val dir = if (direction == "UP") 1 else -1
+            UdpClient.sendVol(dir)
+        } else {
+            BluetoothClient.sendVolume(direction)
+        }
+    }
+
+    private fun sendDictation(text: String) {
+        if (connMode == "WIFI") UdpClient.sendDictation(text)
+        else BluetoothClient.sendDictation(text)
+    }
+
+    private fun sendRecenter() {
+        if (connMode == "WIFI") UdpClient.sendRecenter()
+        else BluetoothClient.sendRecenter()
+    }
+
+    private fun closeConnection() {
+        if (connMode == "WIFI") UdpClient.close()
+        else BluetoothClient.close()
     }
 
     private fun animateWelcome() {
@@ -122,7 +187,7 @@ class MouseActivity : AppCompatActivity() {
             sensorHub.isTracking = !sensorHub.isTracking
             if (sensorHub.isTracking) {
                 sensorHub.recenter()
-                BluetoothClient.sendRecenter()
+                sendRecenter()
             }
             updateGyroButtonUI()
         }
@@ -131,14 +196,14 @@ class MouseActivity : AppCompatActivity() {
         binding.recenterButton.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
             sensorHub.recenter()
-            BluetoothClient.sendRecenter()
+            sendRecenter()
             Toast.makeText(this, "Re-centered!", Toast.LENGTH_SHORT).show()
         }
 
         // Left Click (Double tap detection + Touch listener)
         leftClickGestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
-                BluetoothClient.sendDoubleClick()
+                sendDoubleClick()
                 binding.leftClickButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 return true
             }
@@ -172,7 +237,7 @@ class MouseActivity : AppCompatActivity() {
                     val dy = event.y - lastScrollY
                     if (abs(dy) > 40f) {
                         val scrollDelta = if (dy > 0) -1 else 1 // Swipe down = scroll up
-                        BluetoothClient.sendScroll(scrollDelta)
+                        sendScroll(scrollDelta)
                         lastScrollY = event.y
                     }
                 }
@@ -193,15 +258,16 @@ class MouseActivity : AppCompatActivity() {
     }
 
     private fun handleMouseClick(v: View, event: MotionEvent, btn: Char, pressedColor: Int, normalColor: Int) {
+        val btnStr = btn.toString()
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                BluetoothClient.sendClick(btn, "DOWN")
+                sendClick(btnStr, "DOWN")
                 v.backgroundTintList = ColorStateList.valueOf(getColor(pressedColor))
                 applyButtonPressAnimation(v, true)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                BluetoothClient.sendClick(btn, "UP")
+                sendClick(btnStr, "UP")
                 v.backgroundTintList = ColorStateList.valueOf(getColor(normalColor))
                 applyButtonPressAnimation(v, false)
             }
@@ -226,11 +292,11 @@ class MouseActivity : AppCompatActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             KeyEvent.KEYCODE_VOLUME_UP -> {
-                BluetoothClient.sendVolume("UP")
+                sendVolume("UP")
                 true
             }
             KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                BluetoothClient.sendVolume("DOWN")
+                sendVolume("DOWN")
                 true
             }
             else -> super.onKeyDown(keyCode, event)
@@ -278,7 +344,7 @@ class MouseActivity : AppCompatActivity() {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
                         val text = matches[0]
-                        BluetoothClient.sendDictation(text)
+                        sendDictation(text)
                         Toast.makeText(this@MouseActivity, "Typed: \"$text\"", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -324,7 +390,7 @@ class MouseActivity : AppCompatActivity() {
                 val cleanProgress = if (progress < 1) 1 else progress
                 sensorHub.sensitivity = cleanProgress.toFloat()
                 sensitivityLabel.text = "Sensitivity: $cleanProgress"
-                BluetoothClient.sendSensitivity(cleanProgress.toFloat())
+                sendSensitivity(cleanProgress.toFloat())
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -336,14 +402,14 @@ class MouseActivity : AppCompatActivity() {
         // Setup Re-center Button
         calibrateBtn.setOnClickListener {
             sensorHub.recenter()
-            BluetoothClient.sendRecenter()
+            sendRecenter()
             Toast.makeText(this, "Re-centered!", Toast.LENGTH_SHORT).show()
         }
 
         // Setup Disconnect Button
         disconnectBtn.setOnClickListener {
             dialog.dismiss()
-            BluetoothClient.close()
+            closeConnection()
             sensorHub.stop()
             
             val intent = Intent(this, WelcomeActivity::class.java)
@@ -358,7 +424,7 @@ class MouseActivity : AppCompatActivity() {
         super.onDestroy()
         pulseAnimator?.cancel()
         sensorHub.stop()
-        BluetoothClient.close()
+        closeConnection()
         speechRecognizer?.destroy()
     }
 }
