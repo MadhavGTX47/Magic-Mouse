@@ -48,18 +48,17 @@ class SensorHub(context: Context) : SensorEventListener {
             sensorHandler = Handler(sensorThread!!.looper)
         }
 
-        if (rotationVectorSensor != null) {
-            sensorManager.registerListener(this, rotationVectorSensor, sensorDelay, sensorHandler)
-            Log.d(TAG, "Rotation vector sensor tracking started (9-axis fused, MAX Hz)")
-        } else {
-            Log.e(TAG, "Rotation vector sensor not available! Falling back to game rotation vector...")
-            val gameRotation = sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
-            if (gameRotation != null) {
-                sensorManager.registerListener(this, gameRotation, sensorDelay, sensorHandler)
-                Log.d(TAG, "Game rotation vector sensor tracking started (6-axis fused, MAX Hz)")
-            } else {
-                Log.e(TAG, "No rotation vector sensors available on this device!")
+        val targetSensor = rotationVectorSensor ?: sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+        if (targetSensor != null) {
+            try {
+                sensorManager.registerListener(this, targetSensor, SensorManager.SENSOR_DELAY_FASTEST, sensorHandler)
+                Log.d(TAG, "Rotation vector tracking registered with SENSOR_DELAY_FASTEST")
+            } catch (e: Exception) {
+                Log.w(TAG, "SENSOR_DELAY_FASTEST failed, falling back to SENSOR_DELAY_GAME", e)
+                sensorManager.registerListener(this, targetSensor, SensorManager.SENSOR_DELAY_GAME, sensorHandler)
             }
+        } else {
+            Log.e(TAG, "No rotation vector sensors available on this device!")
         }
     }
 
