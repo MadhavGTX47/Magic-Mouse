@@ -2,6 +2,10 @@
 
 An Android air mouse for Windows that actually feels natural to use.
 
+<p align="center">
+  <img src="docs/app_screenshot.png" alt="MagicMouse UI" width="300" />
+</p>
+
 Most smartphone mouse apps get frustrating quickly. They rely on basic gyroscope data, which causes the cursor to drift across your screen within seconds. MagicMouse fixes this by combining 9-axis sensor fusion (gyroscope, accelerometer, and magnetometer) on your phone with a C++ 1 Euro Filter on your PC, keeping cursor movement steady and accurate.
 
 ---
